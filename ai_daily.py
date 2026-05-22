@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AI热点日报 — 多源聚合推送飞书"""
+"""AI热点日报 — 多源聚合推送钉钉"""
 
 import os
 import json
@@ -12,7 +12,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Optional
 
-FEISHU_WEBHOOK = os.environ.get("FEISHU_WEBHOOK", "")
+DINGTALK_WEBHOOK = os.environ.get("DINGTALK_WEBHOOK", "")
 
 
 def fetch_json(url: str, timeout: int = 15) -> Optional[dict | list]:
@@ -167,13 +167,10 @@ def fetch_arxiv_ai(top_n: int = 5) -> list[dict]:
     return result
 
 
-def build_feishu_card(all_news: list[dict]) -> dict:
-    """构建飞书消息卡片"""
+def build_dingtalk_markdown(all_news: list[dict]) -> dict:
+    """构建钉钉 Markdown 消息"""
     today = datetime.now().strftime("%Y-%m-%d")
-    elements = [
-        {"tag": "markdown", "content": f"**📅 AI 热点日报 — {today}**\n为您聚合今日 AI 领域值得关注的内容。"},
-        {"tag": "hr"}
-    ]
+    lines = [f"# 🤖 AI 热点日报 {today}\n"]
     sources_order = [
         ("Hacker News", "🔥"),
         ("GitHub Trending", "⭐"),
@@ -184,43 +181,32 @@ def build_feishu_card(all_news: list[dict]) -> dict:
         items = [n for n in all_news if n["source"] == src_name]
         if not items:
             continue
-        elements.append({
-            "tag": "markdown",
-            "content": f"\n**{icon} {src_name}**"
-        })
+        lines.append(f"## {icon} {src_name}\n")
         for item in items:
             title = item["title"][:80]
             url = item["url"]
             desc = item.get("desc", item.get("score", ""))
             extra = f" — {desc}" if desc else ""
-            elements.append({
-                "tag": "markdown",
-                "content": f"▸ [{title}]({url}){extra}"
-            })
-    elements.append({"tag": "hr"})
-    elements.append({
-        "tag": "note",
-        "elements": [{"tag": "plain_text", "content": f"AI Daily · {datetime.now().strftime('%H:%M')} 自动推送"}]
-    })
+            lines.append(f"- [{title}]({url}){extra}")
+        lines.append("")
+    lines.append(f"---\n> AI Daily · {datetime.now().strftime('%H:%M')} 自动推送")
+    text = "\n".join(lines)
     return {
-        "msg_type": "interactive",
-        "card": {
-            "header": {
-                "title": {"tag": "plain_text", "content": f"🤖 AI 热点日报 {today}"},
-                "template": "blue"
-            },
-            "elements": elements
+        "msgtype": "markdown",
+        "markdown": {
+            "title": f"AI热点日报 {today}",
+            "text": text
         }
     }
 
 
-def push_to_feishu(payload: dict):
-    if not FEISHU_WEBHOOK:
-        print("[ERROR] FEISHU_WEBHOOK 未设置，跳过推送")
+def push_to_dingtalk(payload: dict):
+    if not DINGTALK_WEBHOOK:
+        print("[ERROR] DINGTALK_WEBHOOK 未设置，跳过推送")
         return
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
-        FEISHU_WEBHOOK,
+        DINGTALK_WEBHOOK,
         data=data,
         headers={"Content-Type": "application/json"},
         method="POST"
@@ -228,10 +214,10 @@ def push_to_feishu(payload: dict):
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             body = json.loads(resp.read().decode("utf-8"))
-            if body.get("code") == 0:
-                print("[OK] 飞书推送成功")
+            if body.get("errcode") == 0:
+                print("[OK] 钉钉推送成功")
             else:
-                print(f"[WARN] 飞书推送异常: {body}")
+                print(f"[WARN] 钉钉推送异常: {body}")
     except urllib.error.HTTPError as e:
         print(f"[ERROR] HTTP {e.code}: {e.read().decode()}")
     except Exception as e:
@@ -259,8 +245,8 @@ def main():
     if not all_news:
         print("[WARN] 未抓到任何内容")
         return
-    card = build_feishu_card(all_news)
-    push_to_feishu(card)
+    payload = build_dingtalk_markdown(all_news)
+    push_to_dingtalk(payload)
     print(f"\n共推送 {len(all_news)} 条热点")
 
 
