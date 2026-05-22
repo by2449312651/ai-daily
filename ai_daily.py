@@ -60,7 +60,7 @@ def clean_html(raw: str) -> str:
 
 
 def fetch_hackernews_ai(top_n: int = 5) -> list[dict]:
-    """Hacker News 热门帖（按 AI 关键词过滤）"""
+    """Hacker News 热门帖（按 AI / 航天关键词过滤）"""
     result = []
     ids = fetch_json("https://hacker-news.firebaseio.com/v0/topstories.json")
     if not ids:
@@ -68,7 +68,10 @@ def fetch_hackernews_ai(top_n: int = 5) -> list[dict]:
     AI_KEYWORDS = {"ai", "artificial intelligence", "machine learning", "deep learning",
                    "llm", "gpt", "chatgpt", "claude", "openai", "gemini", "copilot",
                    "neural", "transformer", "rag", "agent", "diffusion", "multimodal",
-                   "vision", "language model", "fine-tun", "embedding", "token"}
+                   "vision", "language model", "fine-tun", "embedding", "token",
+                   "space", "rocket", "nasa", "spacex", "launch", "satellite",
+                   "orbit", "lunar", "mars", "starship", "telescope", "james webb",
+                   "astronaut", "太空", "火箭", "卫星", "航天"}
     count = 0
     for sid in ids[:80]:
         item = fetch_json(f"https://hacker-news.firebaseio.com/v0/item/{sid}.json")
@@ -142,6 +145,49 @@ def fetch_36kr_ai(top_n: int = 5) -> list[dict]:
     return result
 
 
+def fetch_spacenews(top_n: int = 5) -> list[dict]:
+    """SpaceNews 航天新闻"""
+    result = []
+    data = fetch_bytes("https://spacenews.com/feed", timeout=10)
+    if not data:
+        return result
+    try:
+        xml_text = data.decode("utf-8", errors="replace")
+        root = ET.fromstring(xml_text)
+        items = root.findall(".//item") or []
+        for item in items[:top_n]:
+            title = item.findtext("title", "")
+            link = item.findtext("link", "")
+            if title:
+                result.append({"title": title.strip()[:80], "url": link, "source": "航天"})
+    except ET.ParseError as e:
+        print(f"[WARN] SpaceNews RSS parse error: {e}")
+    return result
+
+
+def fetch_arxiv_space(top_n: int = 5) -> list[dict]:
+    """Arxiv 航天/天文最新论文"""
+    result = []
+    url = "https://export.arxiv.org/api/query?search_query=cat:astro-ph+OR+cat:physics.space-ph&sortBy=submittedDate&sortOrder=descending&max_results=10"
+    xml_text = fetch_text(url, timeout=20)
+    if not xml_text:
+        return result
+    try:
+        root = ET.fromstring(xml_text)
+        ns = {"atom": "http://www.w3.org/2005/Atom"}
+        entries = root.findall("atom:entry", ns)
+        for entry in entries[:top_n]:
+            title = clean_html(entry.findtext("atom:title", "", ns))
+            link_el = entry.find("atom:id", ns)
+            link = link_el.text.strip() if link_el is not None else ""
+            summary = clean_html(entry.findtext("atom:summary", "", ns))[:120]
+            if any(kw in title.lower() for kw in ("space", "rocket", "satellite", "mars", "lunar", "orbit", "telescope", "galaxy", "exoplanet", "black hole", "solar", "asteroid", "launch")):
+                result.append({"title": title[:100], "url": link, "desc": summary, "source": "Arxiv 航天"})
+    except ET.ParseError as e:
+        print(f"[WARN] Arxiv space parse error: {e}")
+    return result
+
+
 def fetch_arxiv_ai(top_n: int = 5) -> list[dict]:
     """Arxiv AI 最新论文"""
     result = []
@@ -175,6 +221,8 @@ def build_dingtalk_markdown(all_news: list[dict]) -> dict:
         ("Hacker News", "🔥"),
         ("GitHub Trending", "⭐"),
         ("Arxiv AI", "📄"),
+        ("Arxiv 航天", "🚀"),
+        ("航天", "🛰️"),
         ("36氪", "📰"),
     ]
     for src_name, icon in sources_order:
@@ -233,6 +281,8 @@ def main():
         ("Hacker News", fetch_hackernews_ai),
         ("GitHub Trending", fetch_github_trending),
         ("Arxiv AI", fetch_arxiv_ai),
+        ("Arxiv 航天", fetch_arxiv_space),
+        ("航天", fetch_spacenews),
         ("36氪", fetch_36kr_ai),
     ]
     for name, fn in fetchers:
