@@ -1,0 +1,22 @@
+name: AI Daily Push
+
+on:
+  schedule:
+    - cron: "0 22 * * *"
+  workflow_dispatch:
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run AI Daily
+        env:
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+        run: python ai_daily.py
