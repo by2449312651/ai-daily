@@ -135,7 +135,9 @@ def fetch_36kr_ai(top_n: int = 5) -> list[dict]:
             link = item.findtext("link", "")
             if not title:
                 continue
-            keywords = ["ai", "人工智能", "大模型", "GPT", "AI", "模型", "智能", "机器学习", "深度学习", "算法"]
+            keywords = ["ai", "人工智能", "大模型", "GPT", "AI", "模型", "智能", "机器学习", "深度学习", "算法",
+                         "航天", "太空", "火箭", "卫星", "宇宙", "天宫", "神舟", "嫦娥", "火星", "月球",
+                         "飞船", "空间站", "探测器", "宇航", "星链", "北斗", "starship", "nasa"]
             if any(k in title for k in keywords):
                 result.append({"title": title.strip()[:80], "url": link, "source": "36氪"})
                 if len(result) >= top_n:
@@ -146,30 +148,27 @@ def fetch_36kr_ai(top_n: int = 5) -> list[dict]:
 
 
 def fetch_space_news(top_n: int = 5) -> list[dict]:
-    """航天新闻（多源聚合）"""
+    """航天新闻（中文源：Solidot）"""
     result = []
-    urls = [
-        ("NASA", "https://www.nasa.gov/rss/dyn/breaking_news.rss"),
-        ("SpaceNews", "https://spacenews.com/feed"),
-    ]
-    for source, url in urls:
-        data = fetch_bytes(url, timeout=10)
-        if not data:
-            continue
-        try:
-            xml_text = data.decode("utf-8", errors="replace")
-            root = ET.fromstring(xml_text)
-            items = root.findall(".//item") or []
-            for item in items[:top_n]:
-                title = item.findtext("title", "")
-                link = item.findtext("link", "")
-                if title and link:
-                    result.append({"title": title.strip()[:80], "url": link.strip(), "source": "航天"})
-                    if len(result) >= top_n:
-                        return result
-        except ET.ParseError as e:
-            print(f"[WARN] {source} RSS parse error: {e}")
-            continue
+    data = fetch_bytes("https://www.solidot.org/index.rss", timeout=10)
+    if not data:
+        return result
+    try:
+        xml_text = data.decode("utf-8", errors="replace")
+        root = ET.fromstring(xml_text)
+        items = root.findall(".//item") or []
+        space_kw = ["太空", "航天", "火箭", "卫星", "空间站", "火星", "月球", "宇宙",
+                     "NASA", "SpaceX", "天文", "望远镜", "星系", "黑洞", "探测器", "神舟",
+                     "嫦娥", "天宫", "轨道", "宇航", "飞船", "星舰", "starship"]
+        for item in items:
+            title = item.findtext("title", "")
+            link = item.findtext("link", "")
+            if title and link and any(kw in title for kw in space_kw):
+                result.append({"title": clean_html(title)[:80], "url": link.strip(), "source": "航天"})
+                if len(result) >= top_n:
+                    break
+    except ET.ParseError as e:
+        print(f"[WARN] Solidot RSS parse error: {e}")
     return result
 
 
@@ -229,7 +228,6 @@ def build_dingtalk_markdown(all_news: list[dict]) -> dict:
         ("Hacker News", "🔥"),
         ("GitHub Trending", "⭐"),
         ("Arxiv AI", "📄"),
-        ("Arxiv 航天", "🚀"),
         ("航天", "🛰️"),
         ("36氪", "📰"),
     ]
@@ -289,7 +287,6 @@ def main():
         ("Hacker News", fetch_hackernews_ai),
         ("GitHub Trending", fetch_github_trending),
         ("Arxiv AI", fetch_arxiv_ai),
-        ("Arxiv 航天", fetch_arxiv_space),
         ("航天", fetch_space_news),
         ("36氪", fetch_36kr_ai),
     ]
