@@ -145,23 +145,31 @@ def fetch_36kr_ai(top_n: int = 5) -> list[dict]:
     return result
 
 
-def fetch_spacenews(top_n: int = 5) -> list[dict]:
-    """SpaceNews 航天新闻"""
+def fetch_space_news(top_n: int = 5) -> list[dict]:
+    """航天新闻（多源聚合）"""
     result = []
-    data = fetch_bytes("https://spacenews.com/feed", timeout=10)
-    if not data:
-        return result
-    try:
-        xml_text = data.decode("utf-8", errors="replace")
-        root = ET.fromstring(xml_text)
-        items = root.findall(".//item") or []
-        for item in items[:top_n]:
-            title = item.findtext("title", "")
-            link = item.findtext("link", "")
-            if title:
-                result.append({"title": title.strip()[:80], "url": link, "source": "航天"})
-    except ET.ParseError as e:
-        print(f"[WARN] SpaceNews RSS parse error: {e}")
+    urls = [
+        ("NASA", "https://www.nasa.gov/rss/dyn/breaking_news.rss"),
+        ("SpaceNews", "https://spacenews.com/feed"),
+    ]
+    for source, url in urls:
+        data = fetch_bytes(url, timeout=10)
+        if not data:
+            continue
+        try:
+            xml_text = data.decode("utf-8", errors="replace")
+            root = ET.fromstring(xml_text)
+            items = root.findall(".//item") or []
+            for item in items[:top_n]:
+                title = item.findtext("title", "")
+                link = item.findtext("link", "")
+                if title and link:
+                    result.append({"title": title.strip()[:80], "url": link.strip(), "source": "航天"})
+                    if len(result) >= top_n:
+                        return result
+        except ET.ParseError as e:
+            print(f"[WARN] {source} RSS parse error: {e}")
+            continue
     return result
 
 
@@ -282,7 +290,7 @@ def main():
         ("GitHub Trending", fetch_github_trending),
         ("Arxiv AI", fetch_arxiv_ai),
         ("Arxiv 航天", fetch_arxiv_space),
-        ("航天", fetch_spacenews),
+        ("航天", fetch_space_news),
         ("36氪", fetch_36kr_ai),
     ]
     for name, fn in fetchers:
