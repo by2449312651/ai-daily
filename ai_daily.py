@@ -60,9 +60,9 @@ def clean_html(raw: str) -> str:
 
 
 def fetch_hackernews_ai(top_n: int = 5) -> list[dict]:
-    """Hacker News 热门帖（按 AI / 航天关键词过滤）"""
+    """Hacker News 最新帖子（按 AI / 航天关键词过滤，用 newstories 确保每天新鲜）"""
     result = []
-    ids = fetch_json("https://hacker-news.firebaseio.com/v0/topstories.json")
+    ids = fetch_json("https://hacker-news.firebaseio.com/v0/newstories.json")
     if not ids:
         return result
     AI_KEYWORDS = {"ai", "artificial intelligence", "machine learning", "deep learning",
@@ -73,7 +73,7 @@ def fetch_hackernews_ai(top_n: int = 5) -> list[dict]:
                    "orbit", "lunar", "mars", "starship", "telescope", "james webb",
                    "astronaut", "太空", "火箭", "卫星", "航天"}
     count = 0
-    for sid in ids[:80]:
+    for sid in ids[:200]:
         item = fetch_json(f"https://hacker-news.firebaseio.com/v0/item/{sid}.json")
         if not item or not item.get("title"):
             continue
@@ -172,10 +172,20 @@ def fetch_space_news(top_n: int = 5) -> list[dict]:
     return result
 
 
+def _arxiv_date_range(days_back: int = 2) -> str:
+    """生成 Arxiv API 日期范围，限制在最近 N 天内"""
+    from datetime import timedelta
+    now = datetime.now()
+    since = (now - timedelta(days=days_back)).strftime("%Y%m%d%H%M%S")
+    until = now.strftime("%Y%m%d%H%M%S")
+    return f"+AND+submittedDate:[{since}+TO+{until}]"
+
+
 def fetch_arxiv_space(top_n: int = 5) -> list[dict]:
     """Arxiv 航天/天文最新论文"""
     result = []
-    url = "https://export.arxiv.org/api/query?search_query=cat:astro-ph+OR+cat:physics.space-ph&sortBy=submittedDate&sortOrder=descending&max_results=10"
+    base = "https://export.arxiv.org/api/query?search_query=cat:astro-ph+OR+cat:physics.space-ph"
+    url = base + _arxiv_date_range() + "&sortBy=submittedDate&sortOrder=descending&max_results=10"
     xml_text = fetch_text(url, timeout=20)
     if not xml_text:
         return result
@@ -196,9 +206,10 @@ def fetch_arxiv_space(top_n: int = 5) -> list[dict]:
 
 
 def fetch_arxiv_ai(top_n: int = 5) -> list[dict]:
-    """Arxiv AI 最新论文"""
+    """Arxiv AI 最新论文（限近 2 天）"""
     result = []
-    url = "https://export.arxiv.org/api/query?search_query=cat:cs.AI&sortBy=submittedDate&sortOrder=descending&max_results=10"
+    base = "https://export.arxiv.org/api/query?search_query=cat:cs.AI"
+    url = base + _arxiv_date_range() + "&sortBy=submittedDate&sortOrder=descending&max_results=10"
     xml_text = fetch_text(url, timeout=20)
     if not xml_text:
         return result
